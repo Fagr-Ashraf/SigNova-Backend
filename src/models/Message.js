@@ -17,22 +17,36 @@ const messageSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+
     sender_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+
     receiver_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+
     type: {
       type: String,
       enum: MESSAGE_TYPES,
       required: true,
     },
-    content: { type: String, required: true },
+
+    content: {
+      type: String,
+      required: true,
+    },
+
+    // ✅ NEW FIELD
+    video_url: {
+      type: String,
+      default: null,
+    },
+
     translated_from: {
       type: String,
       default: null,
@@ -43,7 +57,11 @@ const messageSchema = new mongoose.Schema(
         message: "translated_from must be text, sign, or null",
       },
     },
-    timestamp: { type: Date, default: Date.now },
+
+    timestamp: {
+      type: Date,
+      default: Date.now,
+    },
   },
   { timestamps: false }
 );

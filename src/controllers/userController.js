@@ -1,5 +1,5 @@
 const userService = require("../services/userService");
-const { uploadImageBuffer } = require("../services/cloudinaryService");
+const { uploadAvatarBuffer } = require("../services/cloudinaryService");
 const { sendSuccess, sendError } = require("../utils/apiResponse");
 
 async function search(req, res, next) {
@@ -42,7 +42,7 @@ async function uploadAvatar(req, res, next) {
     if (!req.file || !req.file.buffer) {
       return sendError(res, "Avatar file is required", null, 400);
     }
-    const url = await uploadImageBuffer(req.file.buffer, req.file.mimetype);
+    const url = await uploadAvatarBuffer(req.file.buffer);
     const updated = await userService.updateProfile(req.userId, { avatar: url });
     if (!updated) {
       return sendError(res, "User not found", null, 404);

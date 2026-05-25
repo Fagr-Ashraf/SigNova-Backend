@@ -12,6 +12,10 @@ const profileRouter = express.Router();
 profileRouter.use(authRequired);
 profileRouter.get("/profile", userController.getProfile);
 profileRouter.put("/profile", userController.updateProfile);
-profileRouter.post("/upload-avatar", wrapMulter(uploadAvatar.single("avatar")), userController.uploadAvatar);
-
+profileRouter.post(
+  "/upload-avatar",
+  authRequired,
+  uploadAvatar.single("avatar"),
+  userController.uploadAvatar
+);
 module.exports = { searchRouter, profileRouter };

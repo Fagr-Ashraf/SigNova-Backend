@@ -25,6 +25,8 @@ function initChatSocket(io) {
   });
 
   io.on("connection", (socket) => {
+    console.log("🔥 Socket connected:", socket.id);
+
     socket.on("join_session", async (payload, ack) => {
       try {
         const sessionId = payload?.session_id;

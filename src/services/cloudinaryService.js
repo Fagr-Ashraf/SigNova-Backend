@@ -20,12 +20,21 @@ function uploadBuffer(buffer, options = {}) {
   });
 }
 
-async function uploadImageBuffer(buffer, mimeType) {
+async function uploadAvatarBuffer(buffer) {
+  const result = await uploadBuffer(buffer, {
+    folder: "signnova/users/avatars",
+    resource_type: "image",
+  });
+
+  return result.secure_url;
+}
+
+async function uploadChatImageBuffer(buffer) {
   const result = await uploadBuffer(buffer, {
     folder: "signnova/chat/images",
     resource_type: "image",
-    extra: { ...(mimeType && { format: mimeType.split("/")[1] }) },
   });
+
   return result.secure_url;
 }
 
@@ -41,12 +50,18 @@ async function uploadVideoBuffer(buffer) {
   const result = await uploadBuffer(buffer, {
     folder: "signnova/chat/video",
     resource_type: "video",
+    extra: {
+      format: "mp4",
+      secure: true
+    }
   });
+
   return result.secure_url;
 }
 
 module.exports = {
-  uploadImageBuffer,
+  uploadAvatarBuffer,
+  uploadChatImageBuffer,
   uploadAudioBuffer,
   uploadVideoBuffer,
   uploadBuffer,

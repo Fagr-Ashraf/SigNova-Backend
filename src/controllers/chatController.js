@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const chatService = require("../services/chatService");
-const { uploadImageBuffer, uploadAudioBuffer, uploadVideoBuffer } = require("../services/cloudinaryService");
+const { uploadChatImageBuffer, uploadAudioBuffer, uploadVideoBuffer } = require("../services/cloudinaryService");
 const { sendSuccess, sendError } = require("../utils/apiResponse");
 
 function getIo(req) {
@@ -92,7 +92,7 @@ async function uploadImage(req, res, next) {
     }
     const session = await chatService.assertSessionMember(session_id, req.userId);
     const peer = chatService.otherParticipant(session, req.userId);
-    const url = await uploadImageBuffer(req.file.buffer, req.file.mimetype);
+    const url = await uploadChatImageBuffer(req.file.buffer, req.file.mimetype);
     const dto = await chatService.createMessage({
       sessionId: session_id,
       senderId: req.userId,
