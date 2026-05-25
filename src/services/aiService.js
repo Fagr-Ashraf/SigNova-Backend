@@ -17,28 +17,24 @@ async function callTextToSign(text) {
     throw new Error("text is required");
   }
 
-  const res = await axios.post(
-    `${getBaseUrl()}/text-to-sign`,
-    { text },
-    {
-      responseType: "arraybuffer",
-      timeout: 120000,
-      validateStatus: () => true,
-    }
-  );
-
-  if (res.status >= 400) {
-    const errText =
-      typeof res.data === "string"
-        ? res.data
-        : Buffer.isBuffer(res.data)
-        ? res.data.toString("utf8")
-        : JSON.stringify(res.data);
-
-    throw new Error(`FastAPI text-to-sign failed (${res.status}): ${errText}`);
+const res = await axios.post(
+  `${getBaseUrl()}/text-to-sign`,
+  { text },
+  {
+    responseType: "arraybuffer", // MUST
+    headers: {
+      "Accept": "video/mp4"
+    },
+    timeout: 120000,
+    validateStatus: () => true,
   }
+);
 
-  return Buffer.from(res.data);
+if (res.status >= 400) {
+  throw new Error("FastAPI failed");
+}
+
+return Buffer.from(res.data); // OK now
 }
 
 /**
