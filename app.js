@@ -6,7 +6,7 @@ const chatRoutes = require("./src/routes/chatRoutes");
 const translationRoutes = require("./src/routes/translationRoutes");
 const { searchRouter, profileRouter } = require("./src/routes/userRoutes");
 const { errorMiddleware, notFoundHandler } = require("./src/middleware/errorMiddleware");
-
+const cookieParser = require("cookie-parser");
 const app = express();
 
 app.set("trust proxy", 1);
@@ -18,6 +18,7 @@ app.use(
   })
 );
 app.use(express.json({ limit: "2mb" }));
+app.use(cookieParser());
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,

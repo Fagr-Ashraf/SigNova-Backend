@@ -24,11 +24,12 @@ const userSchema = new mongoose.Schema(
     gender: { type: String, default: null, trim: true },
     isDeaf: { type: Boolean, required: true, default: false },
     avatar: { type: String, default: null },
+    refreshToken: {
+      type: String,
+      default: null,
+      },
   },
   { timestamps: { createdAt: "createdAt", updatedAt: false } }
 );
-
-userSchema.index({ username: 1 });
-userSchema.index({ email: 1 });
 
 module.exports = mongoose.model("User", userSchema);
