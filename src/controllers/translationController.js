@@ -3,7 +3,6 @@ const mongoose = require("mongoose");
 const chatService = require("../services/chatService");
 
 const {
-  callTextToSign,
   callSignToText,
 } = require("../services/aiService");
 
@@ -64,30 +63,12 @@ async function textToSign(req, res, next) {
       req.userId
     );
 
-    let videoBuf;
-
-    try {
-      videoBuf = await callTextToSign(text.trim());
-    } catch (e) {
-      e.statusCode = e.statusCode || 502;
-      throw e;
-    }
-
-    let url;
-
-    try {
-      url = await uploadVideoBuffer(videoBuf);
-    } catch (e) {
-      e.statusCode = 502;
-      e.message = `Cloudinary upload failed: ${e.message}`;
-      throw e;
-    }
-
+    // Save ONLY the original text.
     const dto = await chatService.addBotTranslationMessage({
       session,
       humanUserId: req.userId,
-      type: "translation_video",
-      content: url,
+      type: "translation_text",
+      content: text.trim(),
       translated_from: "text",
     });
 
@@ -96,7 +77,7 @@ async function textToSign(req, res, next) {
     return sendSuccess(
       res,
       { message: dto },
-      "Translation video ready",
+      "Translation text saved",
       session_id
     );
   } catch (e) {
@@ -201,31 +182,13 @@ async function standaloneTextToSign(req, res, next) {
       );
     }
 
-    let videoBuf;
-
-    try {
-      videoBuf = await callTextToSign(text.trim());
-    } catch (e) {
-      e.statusCode = e.statusCode || 502;
-      throw e;
-    }
-
-    let url;
-
-    try {
-      url = await uploadVideoBuffer(videoBuf);
-    } catch (e) {
-      e.statusCode = 502;
-      e.message = `Cloudinary upload failed: ${e.message}`;
-      throw e;
-    }
-
+    // No FastAPI. Just return the text.
     return sendSuccess(
       res,
       {
-        video_url: url,
+        text: text.trim(),
       },
-      "Standalone translation video ready"
+      "Text received successfully"
     );
   } catch (e) {
     next(e);
@@ -276,8 +239,6 @@ async function standaloneSignToText(req, res, next) {
 module.exports = {
   textToSign,
   signToText,
-
-  // NEW
   standaloneTextToSign,
   standaloneSignToText,
 };
