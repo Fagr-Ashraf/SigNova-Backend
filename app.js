@@ -42,6 +42,7 @@ app.use("/users", searchRouter);
 app.use("/user", profileRouter);
 app.use("/chat", chatRoutes);
 app.use("/translation", translationRoutes);
+app.use("/", searchRouter);
 
 app.use(notFoundHandler);
 app.use(errorMiddleware);
