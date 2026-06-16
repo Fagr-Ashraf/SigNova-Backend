@@ -3,48 +3,89 @@ const User = require("../models/User");
 const Message = require("../models/Message");
 const ChatSession = require("../models/ChatSession");
 
-async function searchByUsername(usernameQuery, excludeUserId = null) {
-  if (!usernameQuery || typeof usernameQuery !== "string") {
-    return [];
-  }
-  const q = usernameQuery.trim();
-  if (!q) return [];
-  const filter = {
-    username: new RegExp(`^${escapeRegex(q)}`, "i"),
-  };
-  if (excludeUserId && mongoose.Types.ObjectId.isValid(excludeUserId)) {
-    filter._id = { $ne: new mongoose.Types.ObjectId(String(excludeUserId)) };
-  }
-  const users = await User.find(filter)
-    .limit(20)
-    .select("username avatar")
-    .lean();
-  return users.map((u) => ({
-    user_id: u._id.toString(),
-    username: u.username,
-    avatar: u.avatar,
-  }));
-}
-
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+async function searchByUsername(searchQuery, excludeUserId = null) {
+  if (!searchQuery || typeof searchQuery !== "string") {
+    return [];
+  }
+
+  const q = searchQuery.trim();
+
+  if (!q) {
+    return [];
+  }
+
+  // Prefix search (e.g. "al" matches "alice", "010" matches "01012345678")
+  const regex = new RegExp(`^${escapeRegex(q)}`, "i");
+
+  const filter = {
+    $or: [
+      { username: regex },
+      { phone: regex },
+    ],
+  };
+
+  if (
+    excludeUserId &&
+    mongoose.Types.ObjectId.isValid(excludeUserId)
+  ) {
+    filter._id = {
+      $ne: new mongoose.Types.ObjectId(String(excludeUserId)),
+    };
+  }
+
+  const users = await User.find(filter)
+    .limit(20)
+    .select("username phone avatar")
+    .lean();
+
+  return users.map((u) => ({
+    user_id: u._id.toString(),
+    username: u.username,
+    phone: u.phone,
+    avatar: u.avatar,
+  }));
+}
+
 async function getProfileWithStats(userId) {
   const user = await User.findById(userId).lean();
-  if (!user) return null;
-  const sessions = await ChatSession.find({ participants: userId }).select("_id").lean();
+
+  if (!user) {
+    return null;
+  }
+
+  const sessions = await ChatSession.find({
+    participants: userId,
+  })
+    .select("_id")
+    .lean();
+
   const sessionIds = sessions.map((s) => s._id);
 
-  const [totalMessages, totalTranslations, totalMediaSent] = await Promise.all([
-    Message.countDocuments({ sender_id: userId }),
-    Message.countDocuments({
-      session_id: { $in: sessionIds },
-      type: { $in: ["translation_video", "translation_text"] },
-    }),
+  const [
+    totalMessages,
+    totalTranslations,
+    totalMediaSent,
+  ] = await Promise.all([
     Message.countDocuments({
       sender_id: userId,
-      type: { $in: ["image", "audio", "video"] },
+    }),
+
+    Message.countDocuments({
+      session_id: { $in: sessionIds },
+      type: {
+        $in: ["translation_video", "translation_text"],
+      },
+    }),
+
+    Message.countDocuments({
+      sender_id: userId,
+      type: {
+        $in: ["image", "audio", "video"],
+      },
     }),
   ]);
 
@@ -66,32 +107,68 @@ async function getProfileWithStats(userId) {
 }
 
 async function updateProfile(userId, updates) {
-  const allowed = ["username", "email", "phone", "dob", "gender", "isDeaf", "avatar"];
+  const allowed = [
+    "username",
+    "email",
+    "phone",
+    "dob",
+    "gender",
+    "isDeaf",
+    "avatar",
+  ];
+
   const patch = {};
+
   for (const key of allowed) {
     if (Object.prototype.hasOwnProperty.call(updates, key)) {
       patch[key] = updates[key];
     }
   }
+
   if (patch.username) {
-    patch.username = String(patch.username).toLowerCase().trim();
-    const taken = await User.findOne({ username: patch.username, _id: { $ne: userId } });
+    patch.username = String(patch.username)
+      .toLowerCase()
+      .trim();
+
+    const taken = await User.findOne({
+      username: patch.username,
+      _id: { $ne: userId },
+    });
+
     if (taken) {
       const err = new Error("Username already taken");
       err.statusCode = 409;
       throw err;
     }
   }
+
   if (patch.email) {
-    patch.email = String(patch.email).toLowerCase().trim();
-    const taken = await User.findOne({ email: patch.email, _id: { $ne: userId } });
+    patch.email = String(patch.email)
+      .toLowerCase()
+      .trim();
+
+    const taken = await User.findOne({
+      email: patch.email,
+      _id: { $ne: userId },
+    });
+
     if (taken) {
       const err = new Error("Email already registered");
       err.statusCode = 409;
       throw err;
     }
   }
-  const user = await User.findByIdAndUpdate(userId, { $set: patch }, { new: true }).lean();
+
+  const user = await User.findByIdAndUpdate(
+    userId,
+    {
+      $set: patch,
+    },
+    {
+      new: true,
+    }
+  ).lean();
+
   return user;
 }
 
