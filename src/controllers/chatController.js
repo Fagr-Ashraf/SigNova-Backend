@@ -7,6 +7,16 @@ function getIo(req) {
   return req.app.get("io");
 }
 
+// ✅ NEW: Fetch all active chat sessions with user details and last messages
+async function getSessions(req, res, next) {
+  try {
+    const sessions = await chatService.getUserSessions(req.userId);
+    return sendSuccess(res, { sessions }, "Chat sessions retrieved successfully");
+  } catch (e) {
+    next(e);
+  }
+}
+
 async function start(req, res, next) {
   try {
     const { sender_id, receiver_username } = req.body;
@@ -171,4 +181,4 @@ async function uploadVideo(req, res, next) {
   }
 }
 
-module.exports = { start, postMessage, history, uploadImage, uploadAudio, uploadVideo };
+module.exports = { getSessions, start, postMessage, history, uploadImage, uploadAudio, uploadVideo };

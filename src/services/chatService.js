@@ -4,6 +4,57 @@ const User = require("../models/User");
 const { participantKeyFromIds } = require("../utils/sessionKey");
 const { getBotUserId } = require("../utils/botUser");
 
+// ✅ NEW: Business logic to fetch user's chat listing sorted by the latest message
+async function getUserSessions(userId) {
+  // Find all sessions where this user is listed in the participants array
+  const sessions = await ChatSession.find({ participants: userId })
+    .populate("participants", "username avatar")
+    .lean();
+
+  const formattedSessions = [];
+
+  for (const session of sessions) {
+    // 1. Separate out the other user's profile information
+    const peerDoc = session.participants.find(
+      (p) => p._id.toString() !== userId.toString()
+    );
+
+    // If there is no chat partner (safety fallback), skip
+    if (!peerDoc) continue;
+
+    // 2. Fetch the absolute newest message for this session
+    const lastMsgDoc = await Message.findOne({ session_id: session._id })
+      .sort({ timestamp: -1 })
+      .lean();
+
+    let lastMessage = null;
+    if (lastMsgDoc) {
+      lastMessage = {
+        content: lastMsgDoc.content,
+        type: lastMsgDoc.type,
+        timestamp: lastMsgDoc.timestamp,
+      };
+    }
+
+    formattedSessions.push({
+      session_id: session._id.toString(),
+      peer: {
+        _id: peerDoc._id.toString(),
+        username: peerDoc.username,
+        avatar: peerDoc.avatar || null,
+      },
+      last_message: lastMessage,
+    });
+  }
+
+  // 3. Sort sessions: highest timestamp (most recent) first. Sessions with no messages fall to the bottom.
+  return formattedSessions.sort((a, b) => {
+    const timeA = a.last_message ? new Date(a.last_message.timestamp) : new Date(0);
+    const timeB = b.last_message ? new Date(b.last_message.timestamp) : new Date(0);
+    return timeB - timeA;
+  });
+}
+
 async function findOrCreateSession(userIdA, userIdB) {
   if (userIdA.toString() === userIdB.toString()) {
     const err = new Error("Cannot start a chat with yourself");
@@ -92,16 +143,10 @@ function toMessageDto(doc) {
     session_id: doc.session_id.toString(),
     sender_id: doc.sender_id.toString(),
     receiver_id: doc.receiver_id.toString(),
-
     type: doc.type,
-
     content: doc.content,
-
-    // ✅ NEW
     video_url: doc.video_url ?? null,
-
     translated_from: doc.translated_from ?? null,
-
     timestamp: doc.timestamp,
   };
 }
@@ -113,23 +158,16 @@ async function createMessage({
   type,
   content,
   translated_from = null,
-
-  // ✅ NEW
   video_url = null,
 }) {
   const msg = await Message.create({
     session_id: sessionId,
     sender_id: senderId,
     receiver_id: receiverId,
-
     type,
     content,
-
-    // ✅ NEW
     video_url,
-
     translated_from,
-
     timestamp: new Date(),
   });
 
@@ -142,28 +180,18 @@ async function addBotTranslationMessage({
   type,
   content,
   translated_from,
-
-  // ✅ NEW
   video_url = null,
 }) {
   const botId = getBotUserId();
-
   const receiverId = humanUserId;
 
   return createMessage({
     sessionId: session._id,
-
     senderId: botId,
-
     receiverId,
-
     type,
-
     content,
-
     translated_from,
-
-    // ✅ NEW
     video_url,
   });
 }
@@ -185,10 +213,7 @@ async function getHistory(sessionId, userId) {
       receiver_id: r.receiver_id,
       type: r.type,
       content: r.content,
-
-      // ✅ NEW
       video_url: r.video_url,
-
       translated_from: r.translated_from,
       timestamp: r.timestamp,
     })
@@ -196,6 +221,7 @@ async function getHistory(sessionId, userId) {
 }
 
 module.exports = {
+  getUserSessions,
   findOrCreateSession,
   assertSessionMember,
   startChat,
