@@ -5,22 +5,15 @@ const { sendSuccess, sendError } = require("../utils/apiResponse");
 
 async function signup(req, res, next) {
   try {
-    const { user, accessToken, refreshToken } = await authService.signup(req.body);
+    const { user, accessToken, refreshToken } =
+      await authService.signup(req.body);
 
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict",
-    });
-    console.log("SIGNUP RESPONSE:", {
-      accessToken,
-      refreshToken,
-    });
     return sendSuccess(
       res,
       {
-        accessToken,
         user: authService.toPublicUser(user),
+        accessToken,
+        refreshToken,
       },
       "Account created",
       null,
@@ -35,24 +28,19 @@ async function signup(req, res, next) {
 
 async function login(req, res, next) {
   try {
-    const { user, accessToken, refreshToken } = await authService.login(req.body);
-
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict",
-    });
+    const { user, accessToken, refreshToken } =
+      await authService.login(req.body);
 
     return sendSuccess(
       res,
       {
-        accessToken,
         user: authService.toPublicUser(user),
+        accessToken,
+        refreshToken,
       },
       "Logged in"
     );
   } catch (e) {
-    console.log("🔥 LOGIN ERROR FULL:", e); // ADD THIS
     next(e);
   }
 }
@@ -62,22 +50,18 @@ async function login(req, res, next) {
 async function google(req, res, next) {
   try {
     const { idToken } = req.body;
+
     if (!idToken) return sendError(res, "idToken is required", null, 400);
 
     const { user, accessToken, refreshToken } =
       await authService.loginWithGoogle({ idToken });
 
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict",
-    });
-
     return sendSuccess(
       res,
       {
-        accessToken,
         user: authService.toPublicUser(user),
+        accessToken,
+        refreshToken,
       },
       "Logged in with Google"
     );
@@ -90,11 +74,16 @@ async function google(req, res, next) {
 
 async function refresh(req, res, next) {
   try {
-    const token = req.cookies.refreshToken;
+    // Flutter sends it in body (NO cookies)
+    const { refreshToken } = req.body;
 
-    const { accessToken } = await authService.refresh(token);
+    const tokens = await authService.refresh(refreshToken);
 
-    return sendSuccess(res, { accessToken }, "Token refreshed");
+    return sendSuccess(
+      res,
+      tokens,
+      "Token refreshed"
+    );
   } catch (e) {
     next(e);
   }
@@ -104,11 +93,9 @@ async function refresh(req, res, next) {
 
 async function logout(req, res, next) {
   try {
-    const token = req.cookies.refreshToken;
+    const { refreshToken } = req.body;
 
-    await authService.logout(token);
-
-    res.clearCookie("refreshToken");
+    await authService.logout(refreshToken);
 
     return sendSuccess(res, null, "Logged out");
   } catch (e) {
@@ -130,7 +117,7 @@ module.exports = {
   signup,
   login,
   google,
-  me,
   refresh,
   logout,
+  me,
 };
