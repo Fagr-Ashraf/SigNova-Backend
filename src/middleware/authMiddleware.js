@@ -11,7 +11,7 @@ async function authRequired(req, res, next) {
       throw err;
     }
     const decoded = verifyJwt(token);
-    const user = await User.findById(decoded.sub).lean();
+const user = await User.findById(decoded.id).lean();
     if (!user) {
       const err = new Error("User not found");
       err.statusCode = 401;

@@ -2,24 +2,24 @@ function errorMiddleware(err, req, res, next) {
   if (res.headersSent) {
     return next(err);
   }
+
+  console.log("🔥 FULL ERROR STACK:");
+  console.log(err); // IMPORTANT
+
   let statusCode = 500;
-  if (err.isAxiosError) {
-    const s = err.response?.status;
-    statusCode = typeof s === "number" && s >= 400 ? s : 502;
-  } else if (typeof err.statusCode === "number" && err.statusCode >= 400) {
+
+  if (typeof err.statusCode === "number") {
     statusCode = err.statusCode;
-  } else if (typeof err.status === "number" && err.status >= 400) {
+  } else if (typeof err.status === "number") {
     statusCode = err.status;
   }
-  const message =
-    statusCode === 500 && process.env.NODE_ENV === "production"
-      ? "Internal server error"
-      : err.message || "Internal server error";
+
   return res.status(statusCode).json({
     status: "error",
     session_id: null,
     data: {},
-    message,
+    message: err.message,   // 🔥 ALWAYS SHOW REAL ERROR
+    stack: err.stack,       // 🔥 TEMP ONLY (remove later)
   });
 }
 

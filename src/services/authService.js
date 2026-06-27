@@ -3,54 +3,28 @@ const jwt = require("jsonwebtoken");
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/User");
 
+const {
+  generateAccessToken,
+  generateRefreshToken,
+  verifyRefreshToken,
+} = require("../utils/jwt");
+
 const SALT_ROUNDS = 12;
-
-/* ================= TOKENS ================= */
-
-function signAccessToken(user) {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("JWT_SECRET is not configured");
-
-  return jwt.sign(
-    {
-      sub: user._id.toString(),
-      username: user.username,
-    },
-    secret,
-    { expiresIn: "15m" } // access token short
-  );
-}
-
-function signRefreshToken(user) {
-  const secret = process.env.JWT_REFRESH_SECRET;
-  if (!secret) throw new Error("JWT_REFRESH_SECRET is not configured");
-
-  return jwt.sign(
-    {
-      sub: user._id.toString(),
-    },
-    secret,
-    { expiresIn: "7d" }
-  );
-}
 
 /* ================= SIGNUP ================= */
 
 async function signup(payload) {
-  const existingUsername = await User.findOne({
-    username: payload.username.toLowerCase().trim(),
-  });
+  const username = payload.username.toLowerCase().trim();
+  const email = payload.email.toLowerCase().trim();
 
+  const existingUsername = await User.findOne({ username });
   if (existingUsername) {
     const err = new Error("Username already taken");
     err.statusCode = 409;
     throw err;
   }
 
-  const existingEmail = await User.findOne({
-    email: payload.email.toLowerCase().trim(),
-  });
-
+  const existingEmail = await User.findOne({ email });
   if (existingEmail) {
     const err = new Error("Email already registered");
     err.statusCode = 409;
@@ -60,9 +34,9 @@ async function signup(payload) {
   const passwordHash = await bcrypt.hash(payload.password, SALT_ROUNDS);
 
   const user = await User.create({
-    username: payload.username.toLowerCase().trim(),
-    email: payload.email.toLowerCase().trim(),
-    phone: payload.phone.trim(),
+    username,
+    email,
+    phone: payload.phone?.trim(),
     password: passwordHash,
     dob: payload.dob || null,
     gender: payload.gender || null,
@@ -70,8 +44,8 @@ async function signup(payload) {
     avatar: payload.avatar || null,
   });
 
-  const accessToken = signAccessToken(user);
-  const refreshToken = signRefreshToken(user);
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
 
   user.refreshToken = refreshToken;
   await user.save();
@@ -100,40 +74,27 @@ async function login({ email, password }) {
     throw err;
   }
 
-  const accessToken = signAccessToken(user);
-  const refreshToken = signRefreshToken(user);
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
 
   user.refreshToken = refreshToken;
-
-  await user.save(); // ✔ SAFE NOW
+  await user.save();
 
   return {
-    user: {
-      _id: user._id,
-      username: user.username,
-      email: user.email,
-      phone: user.phone,
-      dob: user.dob,
-      gender: user.gender,
-      isDeaf: user.isDeaf,
-      avatar: user.avatar,
-      createdAt: user.createdAt,
-    },
+    user,
     accessToken,
     refreshToken,
   };
 }
+
 /* ================= GOOGLE LOGIN ================= */
 
 async function loginWithGoogle({ idToken }) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  if (!clientId) {
-    const err = new Error("Google OAuth is not configured");
-    err.statusCode = 503;
-    throw err;
-  }
+  if (!clientId) throw new Error("Google OAuth not configured");
 
   const client = new OAuth2Client(clientId);
+
   const ticket = await client
     .verifyIdToken({ idToken, audience: clientId })
     .catch(() => null);
@@ -156,40 +117,29 @@ async function loginWithGoogle({ idToken }) {
   let user = await User.findOne({ email });
 
   if (!user) {
-    const baseUsername = (payload.email.split("@")[0] || "user")
+    const baseUsername = (email.split("@")[0] || "user")
       .toLowerCase()
       .replace(/[^a-z0-9_]/g, "");
 
-    let username = baseUsername.slice(0, 32) || "user";
+    let username = baseUsername.slice(0, 32);
     let suffix = 0;
 
     while (await User.findOne({ username })) {
-      suffix += 1;
+      suffix++;
       username = `${baseUsername}${suffix}`.slice(0, 32);
     }
-
-    const randomPassword = await bcrypt.hash(
-      `${payload.sub}:${Date.now()}`,
-      SALT_ROUNDS
-    );
 
     user = await User.create({
       username,
       email,
-      phone: payload.phone ? String(payload.phone) : "-",
-      password: randomPassword,
-      dob: null,
-      gender: null,
-      isDeaf: false,
+      phone: "-",
+      password: await bcrypt.hash(`${payload.sub}:${Date.now()}`, SALT_ROUNDS),
       avatar: payload.picture || null,
     });
-  } else if (payload.picture && !user.avatar) {
-    user.avatar = payload.picture;
-    await user.save();
   }
 
-  const accessToken = signAccessToken(user);
-  const refreshToken = signRefreshToken(user);
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
 
   user.refreshToken = refreshToken;
   await user.save();
@@ -197,7 +147,7 @@ async function loginWithGoogle({ idToken }) {
   return { user, accessToken, refreshToken };
 }
 
-/* ================= REFRESH ================= */
+/* ================= REFRESH (ROTATION FIXED) ================= */
 
 async function refresh(refreshToken) {
   if (!refreshToken) {
@@ -206,21 +156,35 @@ async function refresh(refreshToken) {
     throw err;
   }
 
-  const user = await User.findOne({ refreshToken });
+  let decoded;
 
-  if (!user) {
+  try {
+    decoded = verifyRefreshToken(refreshToken);
+  } catch {
     const err = new Error("Invalid refresh token");
     err.statusCode = 403;
     throw err;
   }
 
-  const secret = process.env.JWT_REFRESH_SECRET;
+  const user = await User.findById(decoded.id);
 
-  jwt.verify(refreshToken, secret);
+  if (!user || user.refreshToken !== refreshToken) {
+    const err = new Error("Refresh token revoked");
+    err.statusCode = 403;
+    throw err;
+  }
 
-  const newAccessToken = signAccessToken(user);
+  // 🔁 ROTATION
+  const newAccessToken = generateAccessToken(user);
+  const newRefreshToken = generateRefreshToken(user);
 
-  return { accessToken: newAccessToken };
+  user.refreshToken = newRefreshToken;
+  await user.save();
+
+  return {
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
+  };
 }
 
 /* ================= LOGOUT ================= */
@@ -236,12 +200,14 @@ async function logout(refreshToken) {
   }
 }
 
-/* ================= HELPERS ================= */
+/* ================= JWT VERIFY ================= */
 
 function verifyJwt(token) {
-  const secret = process.env.JWT_SECRET;
+  const secret = process.env.ACCESS_TOKEN_SECRET;
   return jwt.verify(token, secret);
 }
+
+/* ================= PUBLIC USER ================= */
 
 function toPublicUser(user) {
   if (!user) return null;

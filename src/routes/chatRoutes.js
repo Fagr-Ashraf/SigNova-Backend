@@ -8,6 +8,9 @@ const { uploadImage, uploadAudio, uploadVideo } = require("../middleware/upload"
 const router = express.Router();
 router.use(authRequired);
 
+// ✅ NEW: Endpoint to get all chat sessions for the WhatsApp-style dashboard
+router.get("/sessions", chatController.getSessions);
+
 const startValidate = validateBody({
   receiver_username: { required: true, type: "string" },
 });
