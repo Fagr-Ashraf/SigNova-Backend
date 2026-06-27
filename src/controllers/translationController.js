@@ -1,19 +1,8 @@
 const mongoose = require("mongoose");
-
 const chatService = require("../services/chatService");
-
-const {
-  callSignToText,
-} = require("../services/aiService");
-
-const {
-  uploadVideoBuffer,
-} = require("../services/cloudinaryService");
-
-const {
-  sendSuccess,
-  sendError,
-} = require("../utils/apiResponse");
+const { callTextToSign, callSignToText } = require("../services/aiService");
+const { uploadVideoBuffer } = require("../services/cloudinaryService");
+const { sendSuccess, sendError } = require("../utils/apiResponse");
 
 function getIo(req) {
   return req.app.get("io");
@@ -21,11 +10,8 @@ function getIo(req) {
 
 function emitTranslation(io, sessionId, dto) {
   if (!io) return;
-
   const room = String(sessionId);
-
   io.to(room).emit("receive_message", dto);
-
   io.to(room).emit("translation_result", {
     session_id: room,
     message: dto,
@@ -34,7 +20,7 @@ function emitTranslation(io, sessionId, dto) {
 
 /* =========================================================
    CHAT MODE
-========================================================= */
+   ========================================================= */
 
 async function textToSign(req, res, next) {
   try {
@@ -63,12 +49,28 @@ async function textToSign(req, res, next) {
       req.userId
     );
 
-    // Save ONLY the original text.
+    let videoBuf;
+    try {
+      videoBuf = await callTextToSign(text.trim());
+    } catch (e) {
+      e.statusCode = e.statusCode || 502;
+      throw e;
+    }
+
+    let url;
+    try {
+      url = await uploadVideoBuffer(videoBuf);
+    } catch (e) {
+      e.statusCode = 502;
+      e.message = `Cloudinary upload failed: ${e.message}`;
+      throw e;
+    }
+
     const dto = await chatService.addBotTranslationMessage({
       session,
       humanUserId: req.userId,
-      type: "translation_text",
-      content: text.trim(),
+      type: "translation_video",
+      content: url,
       translated_from: "text",
     });
 
@@ -77,14 +79,13 @@ async function textToSign(req, res, next) {
     return sendSuccess(
       res,
       { message: dto },
-      "Translation text saved",
+      "Translation video ready",
       session_id
     );
   } catch (e) {
     next(e);
   }
 }
-
 async function signToText(req, res, next) {
   try {
     const { session_id } = req.body;
@@ -113,7 +114,6 @@ async function signToText(req, res, next) {
     );
 
     let uploadedVideoUrl;
-
     try {
       uploadedVideoUrl = await uploadVideoBuffer(req.file.buffer);
     } catch (e) {
@@ -123,7 +123,6 @@ async function signToText(req, res, next) {
     }
 
     let translated;
-
     try {
       translated = await callSignToText(req.file);
     } catch (e) {
@@ -153,10 +152,7 @@ async function signToText(req, res, next) {
 
     return sendSuccess(
       res,
-      {
-        message: dto,
-        text: dto.content,
-      },
+      { message: dto, text: dto.content },
       "Translation text ready",
       session_id
     );
@@ -167,7 +163,7 @@ async function signToText(req, res, next) {
 
 /* =========================================================
    STANDALONE MODE (NO CHAT)
-========================================================= */
+   ========================================================= */
 
 async function standaloneTextToSign(req, res, next) {
   try {
@@ -182,13 +178,27 @@ async function standaloneTextToSign(req, res, next) {
       );
     }
 
-    // No FastAPI. Just return the text.
+    let videoBuf;
+    try {
+      videoBuf = await callTextToSign(text.trim());
+    } catch (e) {
+      e.statusCode = e.statusCode || 502;
+      throw e;
+    }
+
+    let url;
+    try {
+      url = await uploadVideoBuffer(videoBuf);
+    } catch (e) {
+      e.statusCode = 502;
+      e.message = `Cloudinary upload failed: ${e.message}`;
+      throw e;
+    }
+
     return sendSuccess(
       res,
-      {
-        text: text.trim(),
-      },
-      "Text received successfully"
+      { video_url: url },
+      "Standalone translation video ready"
     );
   } catch (e) {
     next(e);
@@ -207,7 +217,6 @@ async function standaloneSignToText(req, res, next) {
     }
 
     let translated;
-
     try {
       translated = await callSignToText(req.file);
     } catch (e) {
@@ -226,9 +235,7 @@ async function standaloneSignToText(req, res, next) {
 
     return sendSuccess(
       res,
-      {
-        text: String(translated).trim(),
-      },
+      { text: String(translated).trim() },
       "Standalone translation text ready"
     );
   } catch (e) {
