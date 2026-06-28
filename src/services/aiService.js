@@ -18,7 +18,7 @@ async function callTextToSign(text) {
   }
 
 const res = await axios.post(
-  `${getBaseUrl()}/text-to-sign`,
+  `${getBaseUrl()}/text-to-sign/`,
   { text },
   {
     responseType: "arraybuffer", // MUST
@@ -53,7 +53,7 @@ async function callSignToText(videoFile) {
   });
 
   const res = await axios.post(
-    `${getBaseUrl()}/sign-to-text`,
+    `${getBaseUrl()}/sign-to-text/`,
     form,
     {
       headers: form.getHeaders(),
