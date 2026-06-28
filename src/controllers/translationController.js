@@ -49,7 +49,7 @@ async function textToSign(req, res, next) {
       req.userId
     );
 
-    let videoBuf;
+        let videoBuf;
     try {
       videoBuf = await callTextToSign(text.trim());
     } catch (e) {
@@ -65,8 +65,8 @@ async function textToSign(req, res, next) {
       e.message = `Cloudinary upload failed: ${e.message}`;
       throw e;
     }
-
-    const dto = await chatService.addBotTranslationMessage({
+    // Save ONLY the original text.
+    const dto = await chatService.addTranslationMessage({
       session,
       humanUserId: req.userId,
       type: "translation_video",
@@ -139,7 +139,7 @@ async function signToText(req, res, next) {
       );
     }
 
-    const dto = await chatService.addBotTranslationMessage({
+    const dto = await chatService.addTranslationMessage({
       session,
       humanUserId: req.userId,
       type: "translation_text",

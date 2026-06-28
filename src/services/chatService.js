@@ -2,7 +2,6 @@ const ChatSession = require("../models/ChatSession");
 const Message = require("../models/Message");
 const User = require("../models/User");
 const { participantKeyFromIds } = require("../utils/sessionKey");
-const { getBotUserId } = require("../utils/botUser");
 
 // ✅ NEW: Business logic to fetch user's chat listing sorted by the latest message
 async function getUserSessions(userId) {
@@ -174,7 +173,7 @@ async function createMessage({
   return toMessageDto(msg);
 }
 
-async function addBotTranslationMessage({
+async function addTranslationMessage({
   session,
   humanUserId,
   type,
@@ -182,12 +181,12 @@ async function addBotTranslationMessage({
   translated_from,
   video_url = null,
 }) {
-  const botId = getBotUserId();
-  const receiverId = humanUserId;
+  // Find the other participant in the chat
+  const receiverId = otherParticipant(session, humanUserId);
 
   return createMessage({
     sessionId: session._id,
-    senderId: botId,
+    senderId: humanUserId,
     receiverId,
     type,
     content,
@@ -226,7 +225,7 @@ module.exports = {
   assertSessionMember,
   startChat,
   createMessage,
-  addBotTranslationMessage,
+  addTranslationMessage,
   getHistory,
   otherParticipant,
   toMessageDto,
